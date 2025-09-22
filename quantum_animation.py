@@ -90,7 +90,6 @@ class QuantumTunneling(Scene):
             Tex("Total: ", font_size=24).set_color(WHITE)
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.12).to_corner(UR, buff=0.3)
         
-        # Background box for probability data
         self.prob_bg = SurroundingRectangle(
             self.prob_text, 
             color=WHITE, 
