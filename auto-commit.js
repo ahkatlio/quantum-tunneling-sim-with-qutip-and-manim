@@ -2,7 +2,6 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// Cool console colors and effects
 const colors = {
     reset: '\x1b[0m',
     bright: '\x1b[1m',
@@ -22,10 +21,8 @@ const colors = {
     bgCyan: '\x1b[46m'
 };
 
-// Rainbow colors array
 const rainbowColors = [colors.red, colors.yellow, colors.green, colors.cyan, colors.blue, colors.magenta];
 
-// Animated text functions
 function typeWriter(text, color = colors.white, delay = 50) {
     return new Promise((resolve) => {
         let i = 0;
@@ -118,7 +115,6 @@ function progressBar(current, total, message = '', width = 50) {
     const filledWidth = Math.round((current / total) * width);
     const emptyWidth = width - filledWidth;
     
-    // Rainbow progress bar
     let filled = '';
     for (let i = 0; i < filledWidth; i++) {
         const color = rainbowColors[i % rainbowColors.length];
@@ -136,7 +132,6 @@ function progressBar(current, total, message = '', width = 50) {
     }
 }
 
-// Commit messages for different types of changes (no emojis)
 const commitMessages = [
     "Initial quantum tunneling simulation setup",
     "Add QuTiP integration for quantum state evolution", 
@@ -165,7 +160,6 @@ const commitMessages = [
     "Code cleanup and formatting"
 ];
 
-// ASCII Art Banner
 function showBanner() {
     const banner = `
 ${colors.cyan}╔══════════════════════════════════════════════════════════════╗
@@ -179,7 +173,6 @@ ${colors.cyan}╔═════════════════════
     console.log(banner);
 }
 
-// Get list of changed files (individual files, not folders)
 function getChangedFiles() {
     try {
         const status = execSync('git status --porcelain', { encoding: 'utf8' });
@@ -188,10 +181,7 @@ function getChangedFiles() {
             .filter(line => line.trim())
             .map(line => line.substring(3).trim())
             .filter(file => {
-                // Include all files except git internal files
                 if (!file || file.startsWith('.git/')) return false;
-                
-                // Include all file types: .py, .js, .json, .png, .md, etc.
                 return true;
             });
         return files;
@@ -200,7 +190,6 @@ function getChangedFiles() {
     }
 }
 
-// Execute git command with error handling
 function gitCommand(command, description) {
     try {
         execSync(command, { stdio: 'pipe' });
@@ -212,7 +201,6 @@ function gitCommand(command, description) {
     }
 }
 
-// Main auto-commit function
 async function autoCommit() {
     showBanner();
     
@@ -235,39 +223,33 @@ async function autoCommit() {
     
     await wavyText("Starting auto-commit sequence...", colors.magenta);
     
-    // Commit files one by one
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const message = commitMessages[i % commitMessages.length];
         
         await typeWriter(`\nPreparing commit ${i + 1}/${files.length}: ${file}`, colors.cyan, 20);
         
-        // Progress animation with rainbow colors
         for (let j = 0; j <= 30; j++) {
             progressBar(j, 30, `Processing ${file}...`);
             await new Promise(resolve => setTimeout(resolve, 40));
         }
         
-        // Add file
         if (gitCommand(`git add "${file}"`, `adding ${file}`)) {
             console.log(`${colors.green}>>> Added: ${file}${colors.reset}`);
         } else {
             continue;
         }
         
-        // Commit file
         if (gitCommand(`git commit -m "${message}"`, `committing ${file}`)) {
             await glowPulse(`Committed: "${message}"`, colors.green);
         }
         
-        // Cool delay between commits
         if (i < files.length - 1) {
             await wavyText("Preparing next commit...", colors.yellow);
             await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
     
-    // Final animation
     console.log('\n');
     for (let i = 0; i <= 100; i += 4) {
         progressBar(i, 100, "Finalizing quantum commit sequence...");
@@ -278,7 +260,6 @@ async function autoCommit() {
     
     await typeWriter("Ready to push to repository...", colors.cyan, 40);
     
-    // Ask if user wants to push
     const readline = require('readline');
     const rl = readline.createInterface({
         input: process.stdin,
@@ -296,20 +277,17 @@ async function autoCommit() {
         }
         rl.close();
         
-        // Final celebration
         setTimeout(async () => {
             await rainbowText("QUANTUM TUNNELING PROJECT COMMITTED!", 120);
         }, 1000);
     });
 }
 
-// Handle Ctrl+C gracefully
 process.on('SIGINT', () => {
     console.log(`\n\n${colors.red}>>> Auto-commit interrupted by user${colors.reset}`);
     process.exit(0);
 });
 
-// Run the auto-commit wizard
 autoCommit().catch(error => {
     console.error(`${colors.red}>>> Error during auto-commit: ${error.message}${colors.reset}`);
     process.exit(1);
