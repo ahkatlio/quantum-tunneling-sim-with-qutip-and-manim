@@ -37,7 +37,7 @@ class QuantumTunneling(Scene):
         
     def setup_scene(self):
         self.axes = Axes(
-            x_range=[-20, 20, 5],
+            x_range=[-40, 40, 5],
             y_range=[0, 0.8, 0.1],
             x_length=12,
             y_length=6,
@@ -146,7 +146,6 @@ class QuantumTunneling(Scene):
                 Tex(f"Conservation: {total_remaining:.3f}", font_size=24).set_color(WHITE)
             ).arrange(DOWN, aligned_edge=LEFT, buff=0.12).to_corner(UR, buff=0.3)
             
-            # New background box for updated text
             new_prob_bg = SurroundingRectangle(
                 new_prob_text, 
                 color=WHITE, 
