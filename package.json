@@ -1,0 +1,17 @@
+{
+  "name": "quantum-tunneling-auto-commit",
+  "version": "1.0.0",
+  "description": "Cool auto-commit script for quantum tunneling simulation project",
+  "main": "auto-commit.js",
+  "scripts": {
+    "commit": "node auto-commit.js",
+    "auto-commit": "node auto-commit.js",
+    "quantum-commit": "node auto-commit.js"
+  },
+  "keywords": ["quantum", "physics", "git", "automation", "commit"],
+  "author": "Quantum Developer",
+  "license": "MIT",
+  "engines": {
+    "node": ">=12.0.0"
+  }
+}
