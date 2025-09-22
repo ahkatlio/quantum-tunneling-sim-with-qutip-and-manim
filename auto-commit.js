@@ -170,9 +170,9 @@ function showBanner() {
     const banner = `
 ${colors.cyan}╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║      QUANTUM TUNNELING AUTO-COMMIT WIZARD                   ║
+║      QUANTUM TUNNELING AUTO-COMMIT WIZARD                    ║
 ║                                                              ║
-║        Automatically committing your quantum code...        ║
+║        Automatically committing your quantum code...         ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝${colors.reset}
     `;
@@ -188,13 +188,11 @@ function getChangedFiles() {
             .filter(line => line.trim())
             .map(line => line.substring(3).trim())
             .filter(file => {
-                // Only include actual files, not directories
-                if (!file || file.startsWith('.git')) return false;
-                try {
-                    return fs.statSync(file).isFile();
-                } catch {
-                    return true; // Include if we can't stat (might be new file)
-                }
+                // Include all files except git internal files
+                if (!file || file.startsWith('.git/')) return false;
+                
+                // Include all file types: .py, .js, .json, .png, .md, etc.
+                return true;
             });
         return files;
     } catch (error) {
