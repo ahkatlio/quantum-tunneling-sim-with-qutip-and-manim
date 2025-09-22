@@ -115,8 +115,8 @@ class QuantumWavePacket:
         table.add_row("Grid Spacing (dx)", f"{self.dx:.3f}")
         table.add_row("Time Step (dt)", f"{self.dt:.3f}")
         table.add_row("Number of Steps", str(self.nt))
-        table.add_row("Initial Position ($x_\\theta$)", f"{self.x0:.2f}")
-        table.add_row("Initial Momentum ($k_\\theta$)", f"{self.k0:.2f}")
+        table.add_row("Initial Position ($x_0$)", f"{self.x0:.2f}")
+        table.add_row("Initial Momentum ($k_0$)", f"{self.k0:.2f}")
         table.add_row("Wave Packet Width ($\\sigma$)", f"{self.sigma:.2f}")
         table.add_row("Barrier Height", f"{self.height:.2f}")
         table.add_row("Barrier Width", f"{self.width:.2f}")
@@ -148,7 +148,7 @@ class QuantumWavePacket:
         verification_table.add_row("$\\Delta p$", f"{delta_p:.3f}", f"{1/(2*self.sigma):.3f}")
         verification_table.add_row("$\\Delta x \\cdot \\Delta p$", f"{uncertainty_product:.3f}", "≥ 0.500")
 
-        status = "✓ CORRECT" if uncertainty_product >= 0.49 else "✗ INCORRECT"
+        status = "✅ CORRECT" if uncertainty_product >= 0.49 else "❌ INCORRECT"
         verification_table.add_row("Uncertainty Check", status, "≥ \\hbar/2")
         
         self.console.print(verification_table)
@@ -360,31 +360,31 @@ class QuantumWavePacket:
         absorbed_prob = 1.0 - total_final
         results_table.add_row("Absorbed Probability", f"{absorbed_prob:.4f}", f"{absorbed_prob*100:.1f}%")
         
-        results_table.add_row("Final Δx⋅Δp", f"{final_uncertainty:.3f}", 
-                            "✓ Valid" if uncertainty_meaningful and final_uncertainty >= 0.49 
+        results_table.add_row("Final \delta x \cdot \Dpelta p", f"{final_uncertainty:.3f}", 
+                            "✅ Valid" if uncertainty_meaningful and final_uncertainty >= 0.49 
                             else "N/A (absorbed)" if not uncertainty_meaningful 
-                            else "✗ Invalid")
+                            else "❌ Invalid")
         
         self.console.print(Panel(results_table, title="Simulation Complete", border_style="green"))
         
         self.console.print("\n[bold blue]Physical Interpretation:[/bold blue]")
         
         if final_transmission > 0.1:
-            self.console.print(f"• [green]Significant tunneling: {final_transmission*100:.1f}% transmission[/green]")
+            self.console.print(f" [green]Significant tunneling: {final_transmission*100:.1f}% transmission[/green]")
         else:
-            self.console.print(f"• [yellow]Limited tunneling: {final_transmission*100:.1f}% transmission[/yellow]")
+            self.console.print(f" [yellow]Limited tunneling: {final_transmission*100:.1f}% transmission[/yellow]")
         
         if absorbed_prob > 0.1:
-            self.console.print(f"• [blue]Wave absorption: {absorbed_prob*100:.1f}% of wave was absorbed at boundaries[/blue]")
+            self.console.print(f" [blue]Wave absorption: {absorbed_prob*100:.1f}% of wave was absorbed at boundaries[/blue]")
         
         initial_energy = self.k0**2 / 2
-        self.console.print(f"• Initial kinetic energy: {initial_energy:.2f}")
-        self.console.print(f"• Barrier height: {self.height:.2f}")
+        self.console.print(f" Initial kinetic energy: {initial_energy:.2f}")
+        self.console.print(f" Barrier height: {self.height:.2f}")
         
         if initial_energy > self.height:
-            self.console.print("• [green]Classical prediction: Should mostly transmit[/green]")
+            self.console.print(" [green]Classical prediction: Should mostly transmit[/green]")
         else:
-            self.console.print("• [red]Classical prediction: Should be completely reflected[/red]")
+            self.console.print(" [red]Classical prediction: Should be completely reflected[/red]")
     
     def save_animation_data(self, evolution_data, filename='animation_data.json'):
         self.console.print(f"\n[bold blue]Saving animation data for Manim...[/bold blue]")
@@ -423,15 +423,15 @@ def main():
     console.print(Panel(title, border_style="bright_blue"))    
     wave = QuantumWavePacket(
         sigma=1.2,
-        x_start=-20.0,
-        x_end=20.0,
+        x_start=-40.0,
+        x_end=40.0,
         dx=0.1,
         x0=-8.0,
         k0=2.0,
         height=1.5,
         width=1.0,
         dt=0.05,
-        nt=400
+        nt=800
     )
     
     evolution_data = wave.evolve_step_by_step()
@@ -441,9 +441,9 @@ def main():
     animation_data = wave.save_animation_data(evolution_data)
     
     console.print(f"\n[bold green]Simulation completed successfully![/bold green]")
-    console.print(f"• Final uncertainty product: {final_uncertainty:.3f}")
-    console.print(f"• Data saved for Manim visualization")
-    console.print(f"• Analysis plots generated")
+    console.print(f" Final uncertainty product: {final_uncertainty:.3f}")
+    console.print(f" Data saved for Manim visualization")
+    console.print(f" Analysis plots generated")
     
     return wave, evolution_data, animation_data
 
