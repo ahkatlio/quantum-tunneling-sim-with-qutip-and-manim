@@ -90,11 +90,21 @@ class QuantumTunneling(Scene):
             Tex("Total: ", font_size=24).set_color(WHITE)
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.12).to_corner(UR, buff=0.3)
         
+        # Background box for probability data
+        self.prob_bg = SurroundingRectangle(
+            self.prob_text, 
+            color=WHITE, 
+            fill_color=BLACK, 
+            fill_opacity=0.8, 
+            stroke_width=2,
+            buff=0.15
+        )
+        
         self.time_display = Tex("t = 0.00", font_size=28).to_corner(UL, buff=0.3).shift(DOWN * 0.8 + RIGHT * 1.0)
         
         self.add(self.axes, x_label, y_label, self.barrier, barrier_label, 
                 left_absorb_region, right_absorb_region, absorb_label,
-                title, self.prob_text, self.time_display)
+                title, self.prob_bg, self.prob_text, self.time_display)
         
     def animate_tunneling(self):
         max_prob = max(max(frame) for frame in self.prob_frames)
@@ -137,11 +147,22 @@ class QuantumTunneling(Scene):
                 Tex(f"Conservation: {total_remaining:.3f}", font_size=24).set_color(WHITE)
             ).arrange(DOWN, aligned_edge=LEFT, buff=0.12).to_corner(UR, buff=0.3)
             
+            # New background box for updated text
+            new_prob_bg = SurroundingRectangle(
+                new_prob_text, 
+                color=WHITE, 
+                fill_color=BLACK, 
+                fill_opacity=0.8, 
+                stroke_width=2,
+                buff=0.15
+            )
+            
             new_time = Tex(f"t = {current_time:.2f}", font_size=28).to_corner(UL, buff=0.3).shift(DOWN * 0.8 + RIGHT * 1.0)
             
             self.play(
                 Transform(wave_curve, new_wave_curve),
                 Transform(self.prob_text, new_prob_text),
+                Transform(self.prob_bg, new_prob_bg),
                 Transform(self.time_display, new_time),
                 run_time=0.15
             )
