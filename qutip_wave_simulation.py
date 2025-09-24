@@ -13,7 +13,7 @@ from scipy.integrate import trapezoid
 plt.rcParams['text.usetex'] = False
 class QuantumWavePacket:
     def __init__(self, sigma=1.2, x_start=-20.0, x_end=20.0, dx=0.1, x0=-10.0, k0=2.0, 
-                 height=1.5, width=1.0, dt=0.05, nt=400):
+                 height=1.5, width=1.0, dt=0.05, nt=400, auto_adjust_nt=True):
         self.console = Console()
         
         self.sigma = sigma
@@ -26,6 +26,8 @@ class QuantumWavePacket:
         self.width = width
         self.dt = dt
         self.nt = nt
+        self.auto_adjust_nt = auto_adjust_nt
+        self.optimal_nt = None
         
         self.data_dir = Path(__file__).parent / "Data"
         self.data_dir.mkdir(exist_ok=True)
@@ -38,28 +40,15 @@ class QuantumWavePacket:
         
         self.prob = abs(self.psi)**2
         norm = np.sqrt(np.trapezoid(self.prob, self.x))
-        self.prob /= norm**2
         self.psi /= norm
+        self.prob = abs(self.psi)**2
         
         self.initial_state = Qobj(self.psi.reshape(-1, 1))
-        self.initial_state = self.initial_state.unit()
         
         self.v = np.zeros(self.points, dtype=complex)
         mid_value = int(self.points/2)
         end_points = int(width/dx) + mid_value
         self.v[mid_value:end_points] = height
-        
-        absorb_length = int(self.points * 0.2)
-        absorb_strength = 50.0
-        
-        for i in range(absorb_length):
-            idx = self.points - absorb_length + i
-            ramp = (i / absorb_length)**2
-            self.v[idx] += -1j * absorb_strength * ramp
-
-        for i in range(absorb_length):
-            ramp = ((absorb_length - 1 - i) / absorb_length)**2
-            self.v[i] += -1j * absorb_strength * ramp
         
         laplace = np.zeros((self.points, self.points))
         
@@ -71,7 +60,7 @@ class QuantumWavePacket:
         laplace[0, 0] = -2
         laplace[0, 1] = 1
         laplace[self.points-1, self.points-2] = 1
-        laplace[self.points-1, self.points-1] = -2
+        laplace[self.points-1, self.points-1] = -2  
         
         H_matrix = (-1/(2 * self.dx**2) * laplace) + np.diag(self.v)
         
@@ -155,8 +144,60 @@ class QuantumWavePacket:
         
         return uncertainty_product
     
+    def find_optimal_time(self):
+        self.console.print(f"\n[yellow]Phase 1: Finding optimal stopping time...[/yellow]")
+        
+        current_state = self.psi_qobj
+        uncertainty_products = []
+        
+        for i in range(self.nt):
+            exp_x = expect(self.x_op, current_state)
+            exp_p = expect(self.p_op, current_state)
+            exp_x2 = expect(self.x_op * self.x_op, current_state)
+            exp_p2 = expect(self.p_op * self.p_op, current_state)
+            
+            var_x = np.real(exp_x2 - exp_x**2)
+            var_p = np.real(exp_p2 - exp_p**2)
+            
+            delta_x = np.sqrt(max(0, var_x))
+            delta_p = np.sqrt(max(0, var_p))
+            uncertainty_product = delta_x * delta_p
+            uncertainty_products.append(uncertainty_product)
+            
+            if i > 10:
+                if len(uncertainty_products) >= 5:
+                    if (i >= 3 and 
+                        uncertainty_products[-1] < uncertainty_products[-2] and 
+                        uncertainty_products[-2] < uncertainty_products[-3]):
+                        
+                        recent_window = min(20, len(uncertainty_products))
+                        recent_uncertainties = uncertainty_products[-recent_window:]
+                        max_uncertainty = max(recent_uncertainties)
+                        max_index = len(uncertainty_products) - recent_window + recent_uncertainties.index(max_uncertainty)
+                        
+                        optimal_time = max_index * self.dt
+                        optimal_nt = max_index
+                        
+                        self.console.print(f"[green]✓ Found optimal stopping time: {optimal_time:.2f}s (step {optimal_nt})[/green]")
+                        return optimal_nt, optimal_time
+                        
+            if i < self.nt - 1:
+                current_state = self.U * current_state
+        
+        self.console.print(f"[yellow]No peak found, using full simulation time[/yellow]")
+        return self.nt, self.nt * self.dt
+
     def evolve_step_by_step(self):
-        self.console.print(f"\n[cyan]Evolving wave packet for {self.nt} time steps...[/cyan]")
+        if self.auto_adjust_nt:
+            optimal_nt, optimal_time = self.find_optimal_time()
+            self.optimal_nt = optimal_nt
+            show_time = max(optimal_time - 8.0, optimal_time * 0.5)
+            actual_nt = int(show_time / self.dt)
+            self.console.print(f"\n[cyan]Phase 2: Running optimized simulation for {actual_nt} steps ({actual_nt * self.dt:.2f}s)...[/cyan]")
+            self.console.print(f"[yellow]   (Optimal peak at {optimal_time:.2f}s, showing until {show_time:.2f}s for better visualization)[/yellow]")
+        else:
+            actual_nt = self.nt
+            self.console.print(f"\n[cyan]Evolving wave packet for {actual_nt} steps...[/cyan]")
         
         states = [self.psi_qobj]
         times = [0.0]
@@ -168,14 +209,69 @@ class QuantumWavePacket:
         transmission_prob = []
         reflection_prob = []
         barrier_prob = []
+        absorbed_prob = []
+        conservation_error = []
+        uncertainty_products = []
         
         current_state = self.psi_qobj
         
-        for i in track(range(self.nt), description="Time evolution"):
-            t = i * self.dt
+        psi_array = current_state.full().flatten()
+        prob_density = np.abs(psi_array)**2
+        prob_total = np.trapezoid(prob_density, self.x)
+        if prob_total > 0:
+            prob_density = prob_density / prob_total
+        probabilities.append(prob_density.tolist())
+        
+        exp_x = expect(self.x_op, current_state)
+        exp_p = expect(self.p_op, current_state)
+        exp_x2 = expect(self.x_op * self.x_op, current_state)
+        exp_p2 = expect(self.p_op * self.p_op, current_state)
+        
+        expectations_x.append(np.real(exp_x))
+        expectations_p.append(np.real(exp_p))
+        
+        var_x = np.real(exp_x2 - exp_x**2)
+        var_p = np.real(exp_p2 - exp_p**2)
+        variances_x.append(max(0, var_x))
+        variances_p.append(max(0, var_p))
+        
+        delta_x = np.sqrt(max(0, var_x))
+        delta_p = np.sqrt(max(0, var_p))
+        uncertainty_product = delta_x * delta_p
+        uncertainty_products.append(uncertainty_product)
+        
+        barrier_center = (self.x_start + self.x_end) / 2
+        barrier_left = barrier_center - self.width/2
+        barrier_right = barrier_center + self.width/2
+        
+        refl_indices = self.x < barrier_left
+        trans_indices = self.x > barrier_right
+        barrier_indices = (self.x >= barrier_left) & (self.x <= barrier_right)
+        
+        refl_prob = trapezoid(prob_density[refl_indices], self.x[refl_indices]) if np.any(refl_indices) else 0.0
+        trans_prob = trapezoid(prob_density[trans_indices], self.x[trans_indices]) if np.any(trans_indices) else 0.0
+        barrier_prob_val = trapezoid(prob_density[barrier_indices], self.x[barrier_indices]) if np.any(barrier_indices) else 0.0
+        absorbed_prob_direct = 0.0
+        total_prob_direct = refl_prob + trans_prob + barrier_prob_val + absorbed_prob_direct
+        
+        transmission_prob.append(float(f"{trans_prob:.12f}"))
+        reflection_prob.append(float(f"{refl_prob:.12f}"))
+        barrier_prob.append(float(f"{barrier_prob_val:.12f}"))
+        absorbed_prob.append(float(f"{absorbed_prob_direct:.12f}"))
+        conservation_error.append(float(f"{abs(total_prob_direct - 1.0):.12f}"))
+        
+        for i in track(range(1, actual_nt), description="Time evolution"):
+            current_state = self.U * current_state
+            states.append(current_state)
+            times.append(i * self.dt)
             
             psi_array = current_state.full().flatten()
             prob_density = np.abs(psi_array)**2
+            
+            prob_total = np.trapezoid(prob_density, self.x)
+            if prob_total > 0:
+                prob_density = prob_density / prob_total
+            
             probabilities.append(prob_density.tolist())
             
             exp_x = expect(self.x_op, current_state)
@@ -191,31 +287,33 @@ class QuantumWavePacket:
             variances_x.append(max(0, var_x))
             variances_p.append(max(0, var_p))
             
+            delta_x = np.sqrt(max(0, var_x))
+            delta_p = np.sqrt(max(0, var_p))
+            uncertainty_product = delta_x * delta_p
+            uncertainty_products.append(uncertainty_product)
+            
             barrier_center = (self.x_start + self.x_end) / 2
             barrier_left = barrier_center - self.width/2
             barrier_right = barrier_center + self.width/2
             
-            absorb_length = int(self.points * 0.1)
-            left_absorb_end = self.x[absorb_length]
-            right_absorb_start = self.x[-absorb_length]
-            
-            trans_indices = (self.x > barrier_right) & (self.x < right_absorb_start)
-            trans_prob = trapezoid(prob_density[trans_indices], self.x[trans_indices]) if np.any(trans_indices) else 0.0
-            
-            refl_indices = (self.x < barrier_left) & (self.x > left_absorb_end)
-            refl_prob = trapezoid(prob_density[refl_indices], self.x[refl_indices]) if np.any(refl_indices) else 0.0
-            
+            refl_indices = self.x < barrier_left
+            trans_indices = self.x > barrier_right
             barrier_indices = (self.x >= barrier_left) & (self.x <= barrier_right)
+            
+            refl_prob = trapezoid(prob_density[refl_indices], self.x[refl_indices]) if np.any(refl_indices) else 0.0
+            trans_prob = trapezoid(prob_density[trans_indices], self.x[trans_indices]) if np.any(trans_indices) else 0.0
             barrier_prob_val = trapezoid(prob_density[barrier_indices], self.x[barrier_indices]) if np.any(barrier_indices) else 0.0
             
-            transmission_prob.append(trans_prob)
-            reflection_prob.append(refl_prob)
-            barrier_prob.append(barrier_prob_val)
+            absorbed_prob_direct = 0.0
             
-            if i < self.nt - 1:
-                current_state = self.U * current_state
-                states.append(current_state)
-                times.append((i + 1) * self.dt)
+            total_prob_direct = refl_prob + trans_prob + barrier_prob_val + absorbed_prob_direct
+            
+            transmission_prob.append(float(f"{trans_prob:.12f}"))
+            reflection_prob.append(float(f"{refl_prob:.12f}"))
+            barrier_prob.append(float(f"{barrier_prob_val:.12f}"))
+            
+            absorbed_prob.append(float(f"{absorbed_prob_direct:.12f}"))
+            conservation_error.append(float(f"{abs(total_prob_direct - 1.0):.12f}"))
         
         return {
             'states': states,
@@ -227,7 +325,10 @@ class QuantumWavePacket:
             'variances_p': variances_p,
             'transmission_prob': transmission_prob,
             'reflection_prob': reflection_prob,
-            'barrier_prob': barrier_prob
+            'barrier_prob': barrier_prob,
+            'absorbed_prob': absorbed_prob,
+            'conservation_error': conservation_error,
+            'uncertainty_products': uncertainty_products
         }
     
     def analyze_results(self, evolution_data):
@@ -268,10 +369,15 @@ class QuantumWavePacket:
                                                   evolution_data['reflection_prob'],
                                                   evolution_data['barrier_prob'])]
         
-        ax3.plot(times, evolution_data['transmission_prob'], 'b-', label='Transmission', linewidth=2)
-        ax3.plot(times, evolution_data['reflection_prob'], 'r-', label='Reflection', linewidth=2)
-        ax3.plot(times, evolution_data['barrier_prob'], 'g--', label='Barrier', linewidth=2)
-        ax3.plot(times, total_prob, 'k:', label='Total', linewidth=2)
+        ax3.plot(times, evolution_data['transmission_prob'], 'b-', label='Transmission (T)', linewidth=2)
+        ax3.plot(times, evolution_data['reflection_prob'], 'r-', label='Reflection (R)', linewidth=2)
+        ax3.plot(times, evolution_data['barrier_prob'], 'g--', label='Barrier (B)', linewidth=2)
+        ax3.plot(times, evolution_data['absorbed_prob'], 'm:', label='Absorbed (A)', linewidth=2)
+        
+        total_calculated = [r + t + b + a for r, t, b, a in zip(
+            evolution_data['reflection_prob'], evolution_data['transmission_prob'],
+            evolution_data['barrier_prob'], evolution_data['absorbed_prob'])]
+        ax3.plot(times, total_calculated, 'k-', label='R+T+B+A', linewidth=1, alpha=0.7)
         
         ax3.set_xlabel(r'Time $t$')
         ax3.set_ylabel(r'Probability')
@@ -328,7 +434,9 @@ class QuantumWavePacket:
         final_transmission = evolution_data['transmission_prob'][-1]
         final_reflection = evolution_data['reflection_prob'][-1]
         final_barrier = evolution_data['barrier_prob'][-1]
-        total_final = final_transmission + final_reflection + final_barrier
+        final_absorbed = evolution_data['absorbed_prob'][-1]
+        final_conservation_error = evolution_data['conservation_error'][-1]
+        total_final = final_transmission + final_reflection + final_barrier + final_absorbed
         
         final_uncertainty = (np.sqrt(evolution_data['variances_x'][-1]) * 
                            np.sqrt(evolution_data['variances_p'][-1]))
@@ -343,24 +451,33 @@ class QuantumWavePacket:
         results_table.add_column("Percentage/Status", style="yellow")
         
         results_table.add_row("Final Time", f"{evolution_data['times'][-1]:.2f}", f"t = {evolution_data['times'][-1]:.1f}")
-        results_table.add_row("Transmission Probability", f"{final_transmission:.4f}", f"{final_transmission*100:.1f}%")
-        results_table.add_row("Reflection Probability", f"{final_reflection:.4f}", f"{final_reflection*100:.1f}%")
-        results_table.add_row("Barrier Probability", f"{final_barrier:.4f}", f"{final_barrier*100:.1f}%")
-        results_table.add_row("Total Probability", f"{total_final:.4f}", f"{total_final*100:.1f}%")
+        results_table.add_row("Transmission (T)", f"{final_transmission:.8f}", f"{final_transmission*100:.3f}%")
+        results_table.add_row("Reflection (R)", f"{final_reflection:.8f}", f"{final_reflection*100:.3f}%")
+        results_table.add_row("Barrier (B)", f"{final_barrier:.8f}", f"{final_barrier*100:.3f}%")
+        results_table.add_row("Absorbed (A)", f"{final_absorbed:.8f}", f"{final_absorbed*100:.3f}%")
+        results_table.add_row("Total (R+T+B+A)", f"{total_final:.8f}", f"{total_final*100:.3f}%")
         
-        if abs(total_final - 1.0) < 0.01:
+        if final_conservation_error < 1e-6:
             conservation_status = "[green]Excellent[/green]"
-        elif abs(total_final - 1.0) < 0.05:
+        elif final_conservation_error < 1e-4:
             conservation_status = "[yellow]Good[/yellow]"
         else:
             conservation_status = "[red]Poor[/red]"
         
-        results_table.add_row("Probability Conservation", f"{total_final:.4f}", conservation_status)
+        results_table.add_row("Conservation Error", f"{final_conservation_error:.2e}", conservation_status)
         
-        absorbed_prob = 1.0 - total_final
-        results_table.add_row("Absorbed Probability", f"{absorbed_prob:.4f}", f"{absorbed_prob*100:.1f}%")
+        initial_R = evolution_data['reflection_prob'][0]
+        initial_T = evolution_data['transmission_prob'][0]
+        initial_B = evolution_data['barrier_prob'][0]
+        initial_A = evolution_data['absorbed_prob'][0]
         
-        results_table.add_row("Final \delta x \cdot \Dpelta p", f"{final_uncertainty:.3f}", 
+        results_table.add_row("", "", "")
+        results_table.add_row("Initial R", f"{initial_R:.8f}", "Expected: ~1.0")
+        results_table.add_row("Initial T", f"{initial_T:.8f}", "Expected: ~0.0")
+        results_table.add_row("Initial B", f"{initial_B:.8f}", "Expected: ~0.0")
+        results_table.add_row("Initial A", f"{initial_A:.8f}", "Expected: ~0.0")
+        
+        results_table.add_row(r"Final Δx · Δp", f"{final_uncertainty:.3f}", 
                             "✅ Valid" if uncertainty_meaningful and final_uncertainty >= 0.49 
                             else "N/A (absorbed)" if not uncertainty_meaningful 
                             else "❌ Invalid")
@@ -374,8 +491,8 @@ class QuantumWavePacket:
         else:
             self.console.print(f" [yellow]Limited tunneling: {final_transmission*100:.1f}% transmission[/yellow]")
         
-        if absorbed_prob > 0.1:
-            self.console.print(f" [blue]Wave absorption: {absorbed_prob*100:.1f}% of wave was absorbed at boundaries[/blue]")
+        if final_absorbed > 0.1:
+            self.console.print(f" [blue]Wave absorption: {final_absorbed*100:.1f}% of wave was absorbed at boundaries[/blue]")
         
         initial_energy = self.k0**2 / 2
         self.console.print(f" Initial kinetic energy: {initial_energy:.2f}")
@@ -405,7 +522,9 @@ class QuantumWavePacket:
             'variances_p': evolution_data['variances_p'],
             'transmission_prob': evolution_data['transmission_prob'],
             'reflection_prob': evolution_data['reflection_prob'],
-            'barrier_prob': evolution_data['barrier_prob']
+            'barrier_prob': evolution_data['barrier_prob'],
+            'absorbed_prob': evolution_data['absorbed_prob'],
+            'conservation_error': evolution_data['conservation_error']
         }
         
         filepath = self.data_dir / filename
@@ -431,7 +550,7 @@ def main():
         height=1.5,
         width=1.0,
         dt=0.05,
-        nt=800
+        nt=1000
     )
     
     evolution_data = wave.evolve_step_by_step()

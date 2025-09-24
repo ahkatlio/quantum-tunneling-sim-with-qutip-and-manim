@@ -12,7 +12,10 @@ class QuantumTunneling(Scene):
         self.load_data()
         self.setup_scene()
         self.animate_tunneling()
-        self.show_results()
+        # self.show_results()
+    
+    def simple_round(self, values):
+        return [round(v, 1) for v in values]
     
     def load_data(self):
         data_dir = Path(__file__).parent / "Data"
@@ -31,6 +34,7 @@ class QuantumTunneling(Scene):
         self.trans_prob = np.array(self.anim_data["transmission_prob"])
         self.refl_prob = np.array(self.anim_data["reflection_prob"])
         self.barrier_prob = np.array(self.anim_data["barrier_prob"])
+        self.absorbed_prob = np.array(self.anim_data["absorbed_prob"])
         
         self.expectations_x = np.array(self.anim_data["expectations_x"])
         self.expectations_p = np.array(self.anim_data["expectations_p"])
@@ -65,28 +69,18 @@ class QuantumTunneling(Scene):
         barrier_label = Tex(f"Barrier\\\\$V_0 = {self.barrier_height}$", 
                            font_size=24, color=RED).next_to(self.barrier, UP, buff=0.1)
         
-        absorb_length = len(self.x_grid) * 0.2
-        left_absorb_region = Rectangle(
-            width=self.axes.coords_to_point(self.x_grid[int(absorb_length)], 0)[0] - self.axes.coords_to_point(self.x_grid[0], 0)[0],
-            height=self.axes.coords_to_point(0, 0.8)[1] - self.axes.coords_to_point(0, 0)[1],
-            fill_color=GRAY, fill_opacity=0.3, stroke_color=GRAY
-        ).move_to(self.axes.coords_to_point((self.x_grid[0] + self.x_grid[int(absorb_length)])/2, 0.4))
+        # No absorber regions - clean visualization
+        # absorb_length = len(self.x_grid) * 0.2
+        # left_absorb_region = Rectangle(...)
+        # right_absorb_region = Rectangle(...)
+        # absorb_label = Tex("Absorbing\\\\Boundaries", ...)
         
-        right_absorb_region = Rectangle(
-            width=self.axes.coords_to_point(self.x_grid[-1], 0)[0] - self.axes.coords_to_point(self.x_grid[-int(absorb_length)], 0)[0],
-            height=self.axes.coords_to_point(0, 0.8)[1] - self.axes.coords_to_point(0, 0)[1],
-            fill_color=GRAY, fill_opacity=0.3, stroke_color=GRAY
-        ).move_to(self.axes.coords_to_point((self.x_grid[-1] + self.x_grid[-int(absorb_length)])/2, 0.4))
-        
-        absorb_label = Tex("Absorbing\\\\Boundaries", font_size=20, color=GRAY).to_corner(DL, buff=0.5)
-        
-        title = Tex("Quantum Tunneling with Absorbing Boundaries", font_size=32).to_edge(UP, buff=0.5)
+        title = Tex("Quantum Tunneling Simulation", font_size=32).to_edge(UP, buff=0.5)
         
         self.prob_text = VGroup(
             Tex("Transmission: ", font_size=24).set_color(BLUE),
             Tex("Reflection: ", font_size=24).set_color(RED), 
             Tex("Barrier: ", font_size=24).set_color(GREEN),
-            Tex("Absorbed: ", font_size=24).set_color(GRAY),
             Tex("Total: ", font_size=24).set_color(WHITE)
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.12).to_corner(UR, buff=0.3)
         
@@ -101,8 +95,7 @@ class QuantumTunneling(Scene):
         
         self.time_display = Tex("t = 0.00", font_size=28).to_corner(UL, buff=0.3).shift(DOWN * 0.8 + RIGHT * 1.0)
         
-        self.add(self.axes, x_label, y_label, self.barrier, barrier_label, 
-                left_absorb_region, right_absorb_region, absorb_label,
+        self.add(self.axes, x_label, y_label, self.barrier, barrier_label,
                 title, self.prob_bg, self.prob_text, self.time_display)
         
     def animate_tunneling(self):
@@ -135,15 +128,19 @@ class QuantumTunneling(Scene):
             trans_val = self.trans_prob[frame_idx] if frame_idx < len(self.trans_prob) else 0
             refl_val = self.refl_prob[frame_idx] if frame_idx < len(self.refl_prob) else 0
             barrier_val = self.barrier_prob[frame_idx] if frame_idx < len(self.barrier_prob) else 0
-            total_remaining = trans_val + refl_val + barrier_val
-            absorbed_val = 1.0 - total_remaining
+            # No absorbed value - removed absorber
+            
+            rounded_vals = self.simple_round([trans_val, refl_val, barrier_val])
+            trans_rounded, refl_rounded, barrier_rounded = rounded_vals
+            
+            actual_sum = trans_val + refl_val + barrier_val
+            total_rounded = round(actual_sum, 1)
             
             new_prob_text = VGroup(
-                Tex(f"Transmission: {trans_val:.3f}", font_size=24).set_color(BLUE),
-                Tex(f"Reflection: {refl_val:.3f}", font_size=24).set_color(RED),
-                Tex(f"Barrier: {barrier_val:.3f}", font_size=24).set_color(GREEN),
-                Tex(f"Absorbed: {absorbed_val:.3f}", font_size=24).set_color(GRAY),
-                Tex(f"Conservation: {total_remaining:.3f}", font_size=24).set_color(WHITE)
+                Tex(f"Transmission: {trans_rounded:.1f}", font_size=24).set_color(BLUE),
+                Tex(f"Reflection: {refl_rounded:.1f}", font_size=24).set_color(RED),
+                Tex(f"Barrier: {barrier_rounded:.1f}", font_size=24).set_color(GREEN),
+                Tex(f"Total: {total_rounded:.1f}", font_size=24).set_color(WHITE)
             ).arrange(DOWN, aligned_edge=LEFT, buff=0.12).to_corner(UR, buff=0.3)
             
             new_prob_bg = SurroundingRectangle(
@@ -167,25 +164,25 @@ class QuantumTunneling(Scene):
         
         self.wait(2)
     
-    def show_results(self):
-        final_trans = self.trans_prob[-1]
-        final_refl = self.refl_prob[-1] 
-        final_barrier = self.barrier_prob[-1]
-        final_total = final_trans + final_refl + final_barrier
-        final_absorbed = 1.0 - final_total
+    # def show_results(self):
+    #     final_trans = self.trans_prob[-1]
+    #     final_refl = self.refl_prob[-1] 
+    #     final_barrier = self.barrier_prob[-1]
+    #     final_absorbed = self.absorbed_prob[-1]
+    #     final_total = final_trans + final_refl + final_barrier + final_absorbed
         
-        results = VGroup(
-            Tex("Final Results", font_size=32).set_color(YELLOW),
-            Tex(f"Transmission: {final_trans:.1%}", font_size=26).set_color(BLUE),
-            Tex(f"Reflection: {final_refl:.1%}", font_size=26).set_color(RED),
-            Tex(f"Barrier: {final_barrier:.1%}", font_size=26).set_color(GREEN),
-            Tex(f"Absorbed: {final_absorbed:.1%}", font_size=26).set_color(GRAY),
-            Tex(f"Conservation: {final_total:.4f}", font_size=24).set_color(WHITE),
-            Tex("Wave successfully absorbed\\\\at boundaries!", font_size=22).set_color(YELLOW)
-        ).arrange(DOWN, buff=0.3).move_to(ORIGIN)
+    #     results = VGroup(
+    #         Tex("Final Results", font_size=32).set_color(YELLOW),
+    #         Tex(f"Transmission: {final_trans:.1%}", font_size=26).set_color(BLUE),
+    #         Tex(f"Reflection: {final_refl:.1%}", font_size=26).set_color(RED),
+    #         Tex(f"Barrier: {final_barrier:.1%}", font_size=26).set_color(GREEN),
+    #         Tex(f"Absorbed: {final_absorbed:.1%}", font_size=26).set_color(GRAY),
+    #         Tex(f"Total: {final_total:.4f}", font_size=24).set_color(WHITE),
+    #         Tex("Wave successfully absorbed\\\\at boundaries!", font_size=22).set_color(YELLOW)
+    #     ).arrange(DOWN, buff=0.3).move_to(ORIGIN)
         
-        bg = SurroundingRectangle(results, color=WHITE, fill_color=BLACK, fill_opacity=0.9, buff=0.5)
+    #     bg = SurroundingRectangle(results, color=WHITE, fill_color=BLACK, fill_opacity=0.9, buff=0.5)
         
-        self.play(FadeIn(bg), Write(results))
-        self.wait(4)
-        self.play(FadeOut(bg, results))
+    #     self.play(FadeIn(bg), Write(results))
+    #     self.wait(4)
+    #     self.play(FadeOut(bg, results))
