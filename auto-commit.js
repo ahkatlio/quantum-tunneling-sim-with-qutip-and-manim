@@ -42,9 +42,9 @@ function getChangedFiles() {
 function isFirstCommit(file) {
     try {
         execSync(`git log --oneline "${file}"`, { stdio: 'pipe' });
-        return false; // File has commit history
+        return false; 
     } catch (error) {
-        return true; // File not in git history yet
+        return true; 
     }
 }
 
@@ -64,7 +64,6 @@ async function autoCommit() {
     if (files.modified.length > 0) console.log(`${colors.yellow}  ${files.modified.length} modified${colors.reset}`);
     if (files.deleted.length > 0) console.log(`${colors.red}  ${files.deleted.length} deleted${colors.reset}`);
     
-    // Add all files (including deletions)
     try {
         execSync('git add .', { stdio: 'pipe' });
         console.log(`${colors.green}✓ Added all changes${colors.reset}`);
@@ -73,7 +72,6 @@ async function autoCommit() {
         return;
     }
     
-    // Create commit message based on file changes
     let commitMessage;
     if (totalFiles === 1) {
         let file, action;
@@ -89,7 +87,6 @@ async function autoCommit() {
         }
         commitMessage = `${action} ${file}`;
     } else {
-        // Multiple files - prioritize the most significant action
         if (files.deleted.length > 0) {
             if (files.deleted.length === totalFiles) {
                 commitMessage = `remove ${files.deleted.length} files`;
@@ -103,7 +100,6 @@ async function autoCommit() {
         }
     }
     
-    // Commit
     try {
         execSync(`git commit -m "${commitMessage}"`, { stdio: 'pipe' });
         console.log(`${colors.green}✓ Committed: "${commitMessage}"${colors.reset}`);
@@ -112,7 +108,6 @@ async function autoCommit() {
         return;
     }
     
-    // Push
     try {
         execSync('git push', { stdio: 'pipe' });
         console.log(`${colors.green}✓ Pushed to remote${colors.reset}`);
