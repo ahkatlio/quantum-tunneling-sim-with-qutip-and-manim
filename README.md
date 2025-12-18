@@ -2,6 +2,12 @@
 
 A quantum mechanics simulation demonstrating wave packet tunneling through a potential barrier using QuTiP for physics calculations and Manim for visualization.
 
+## Video
+
+
+https://github.com/user-attachments/assets/638a9888-894b-4fa8-8f98-431927e27311
+
+
 ## Features
 
 - **Quantum Wave Packet Evolution**: Accurate time evolution using the Crank-Nicolson method
